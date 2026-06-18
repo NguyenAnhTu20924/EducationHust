@@ -1,0 +1,4 @@
+project_id = "jtdbadwrjwdhdfcntcor"
+
+[functions.make-server-f5d1386a]
+verify_jwt = false

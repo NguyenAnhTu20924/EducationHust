@@ -48,6 +48,156 @@ function hasContent(value: any) {
   return true;
 }
 
+// ─── Formula renderer ─────────────────────────────────────────────────────────
+
+const SYMBOL_MAP: Record<string, string> = {
+  "pi": "π", "alpha": "α", "beta": "β", "gamma": "γ",
+  "delta": "δ", "Delta": "Δ", "sigma": "σ", "Sigma": "Σ",
+  "omega": "ω", "Omega": "Ω", "theta": "θ", "lambda": "λ",
+  "mu": "μ", "epsilon": "ε", "phi": "φ",
+  "infinity": "∞", "inf": "∞",
+  "->": "→", "<->": "↔",
+  ">=": "≥", "<=": "≤", "!=": "≠", "~=": "≈", "+-": "±",
+  "**": "×", "xx": "×", "//": "÷",
+  "sqrt": "√", "sum": "∑", "degree": "°",
+};
+
+function replaceSymbols(text: string): string {
+  let result = text;
+  const keys = Object.keys(SYMBOL_MAP).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    result = result.split(key).join(SYMBOL_MAP[key]);
+  }
+  return result;
+}
+
+function tokenizeFormula(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  // Matches: word^{...}, word_{...}, word^x, word_x, num/den
+  const re = /(\w+)\^\{([^}]+)\}|(\w+)_\{([^}]+)\}|(\w+)\^(\w+)|(\w+)_(\w+)|([^/\s]+)\/([^/\s]+)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(<span key={`t-${lastIndex}`}>{replaceSymbols(text.slice(lastIndex, match.index))}</span>);
+    }
+    const k = match.index;
+    if (match[1] && match[2]) {
+      nodes.push(<span key={k}>{replaceSymbols(match[1])}<sup className="text-[0.65em]">{replaceSymbols(match[2])}</sup></span>);
+    } else if (match[3] && match[4]) {
+      nodes.push(<span key={k}>{replaceSymbols(match[3])}<sub className="text-[0.65em]">{replaceSymbols(match[4])}</sub></span>);
+    } else if (match[5] && match[6]) {
+      nodes.push(<span key={k}>{replaceSymbols(match[5])}<sup className="text-[0.65em]">{replaceSymbols(match[6])}</sup></span>);
+    } else if (match[7] && match[8]) {
+      nodes.push(<span key={k}>{replaceSymbols(match[7])}<sub className="text-[0.65em]">{replaceSymbols(match[8])}</sub></span>);
+    } else if (match[9] && match[10]) {
+      nodes.push(
+        <span key={k} className="inline-flex flex-col items-center align-middle mx-0.5" style={{ lineHeight: 1 }}>
+          <span className="border-b border-current px-0.5 text-[0.75em] leading-tight">{replaceSymbols(match[9].trim())}</span>
+          <span className="px-0.5 text-[0.75em] leading-tight">{replaceSymbols(match[10].trim())}</span>
+        </span>
+      );
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(<span key={`t-${lastIndex}`}>{replaceSymbols(text.slice(lastIndex))}</span>);
+  }
+  return nodes.length > 0 ? nodes : [<span key="0">{replaceSymbols(text)}</span>];
+}
+
+function FormulaDisplay({ formula, className = "" }: { formula: string; className?: string }) {
+  if (!formula) return null;
+  const hasMath = /[\^_]|\b(pi|alpha|beta|gamma|Delta|sigma|sqrt|infinity|theta|phi|mu|omega)\b|>=|<=|!=|->|\+-|\//.test(formula);
+  if (!hasMath) {
+    return <span className={`font-mono font-bold text-blue-950 ${className}`}>{formula}</span>;
+  }
+  return (
+    <span className={`inline-flex flex-wrap items-baseline gap-0.5 font-mono font-bold text-blue-950 ${className}`}>
+      {tokenizeFormula(formula)}
+    </span>
+  );
+}
+
+// ─── Editable text ────────────────────────────────────────────────────────────
+
+function EditableText({
+  value,
+  onChange,
+  multiline = true,
+  className = "",
+}: {
+  value: string;
+  onChange?: (v: string) => void;
+  multiline?: boolean;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  if (!onChange) {
+    return <p className={`text-sm leading-7 text-gray-700 ${className}`}>{value}</p>;
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-2">
+        {multiline ? (
+          <textarea
+            autoFocus
+            className="w-full rounded-xl border border-violet-300 p-2.5 text-sm text-gray-700 outline-none focus:border-violet-500 resize-none leading-7"
+            rows={4}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+          />
+        ) : (
+          <input
+            autoFocus
+            className="w-full rounded-xl border border-violet-300 px-2.5 py-2 text-sm text-gray-700 outline-none focus:border-violet-500"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+          />
+        )}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { onChange(draft); setEditing(false); }}
+            className="rounded-lg bg-violet-600 px-3 py-1 text-xs font-semibold text-white hover:bg-violet-700 transition"
+          >
+            Lưu
+          </button>
+          <button
+            type="button"
+            onClick={() => { setDraft(value); setEditing(false); }}
+            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+          >
+            Hủy
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group relative">
+      <p className={`text-sm leading-7 text-gray-700 ${className}`}>{value}</p>
+      <button
+        type="button"
+        onClick={() => { setDraft(value); setEditing(true); }}
+        className="absolute -right-1 -top-1 hidden group-hover:flex items-center gap-1 rounded-lg bg-white border border-gray-200 px-2 py-0.5 text-xs text-gray-400 hover:text-violet-600 shadow-sm transition"
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        Sửa
+      </button>
+    </div>
+  );
+}
+
 // ─── Step UI labels ───────────────────────────────────────────────────────────
 
 const STEP_UI_LABELS: Record<number, { title: string; short: string }> = {
@@ -177,7 +327,7 @@ function FormulaCard({ formula }: { formula: any }) {
   return (
     <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
       <div className="font-mono text-base font-bold text-blue-950">
-        {formula?.formula || textValue(formula)}
+        <FormulaDisplay formula={formula?.formula || textValue(formula)} className="text-base" />
       </div>
       {formula?.meaning ? (
         <p className="mt-2 text-sm leading-6 text-blue-950/80">{formula.meaning}</p>
@@ -288,10 +438,7 @@ function LearningObjectivesView({ objectives }: { objectives: any }) {
   );
 }
 
-// ─── ROADMAP MAIN COMPONENT ───────────────────────────────────────────────────
-
-
-// ─── LEARNING PATH ROADMAP — Redesigned ───────────────────────────────────────
+// ─── STEP CONFIG ──────────────────────────────────────────────────────────────
 
 const STEP_CONFIG: Record<number, {
   color: string; bg: string; border: string; dot: string;
@@ -310,7 +457,6 @@ function getStepConfig(stepNo: number) {
   return STEP_CONFIG[stepNo] || STEP_CONFIG[3];
 }
 
-// Mini section block inside step detail
 function StepSection({
   emoji, title, children, variant = "default",
 }: {
@@ -350,7 +496,6 @@ function BulletList({ items, color = "bg-gray-400" }: { items: any[]; color?: st
   );
 }
 
-// Sticky progress bar at top
 function ProgressBar({ nodes, activeStep, onSelect }: {
   nodes: any[]; activeStep: number;
   onSelect: (n: number) => void;
@@ -383,7 +528,6 @@ function ProgressBar({ nodes, activeStep, onSelect }: {
           );
         })}
       </div>
-      {/* Progress line */}
       <div className="mt-1.5 h-1 w-full rounded-full bg-gray-100">
         <div
           className="h-1 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-500"
@@ -394,12 +538,18 @@ function ProgressBar({ nodes, activeStep, onSelect }: {
   );
 }
 
+// ─── LEARNING PATH ROADMAP ────────────────────────────────────────────────────
+
 export function LearningPathRoadmap({
   learningPath,
   learningPathNodes,
+  isTeacher = false,
+  onSaveNodeField,
 }: {
   learningPath: any;
   learningPathNodes: any[];
+  isTeacher?: boolean;
+  onSaveNodeField?: (nodeId: string, field: string, value: string) => void;
 }) {
   const root = useMemo(() => getLearningPathData(learningPath), [learningPath]);
   const nodes = useMemo(
@@ -423,7 +573,6 @@ export function LearningPathRoadmap({
   const activeStepNo = Number(activeNode?.step_no || activeNode?.step || 1);
   const cfg = getStepConfig(activeStepNo);
 
-  // Node data
   const goal         = activeNode?.learning_goal || activeNode?.goal;
   const description  = activeNode?.description || activeNode?.short_description;
   const readItems    = asArray(activeNode?.what_to_read);
@@ -440,7 +589,6 @@ export function LearningPathRoadmap({
   const mastery      = activeNode?.mastery_check;
   const supportTip   = activeNode?.support_tip;
 
-  // Root data
   const overview                = root?.overview;
   const learningObjectives      = root?.learning_objectives || {};
   const prerequisiteKnowledge   = asArray(root?.prerequisite_knowledge);
@@ -452,6 +600,12 @@ export function LearningPathRoadmap({
 
   const prevStep = activeStep > firstStep ? activeStep - 1 : null;
   const nextStep = activeStep < nodes.length ? activeStep + 1 : null;
+
+  // Helper: trả về onChange chỉ khi là giáo viên
+  const editable = (field: string) =>
+    isTeacher && onSaveNodeField
+      ? (v: string) => onSaveNodeField(activeNode?.id, field, v)
+      : undefined;
 
   return (
     <div className="space-y-0">
@@ -490,7 +644,6 @@ export function LearningPathRoadmap({
             </div>
           </div>
 
-          {/* Collapsible overview */}
           {showOverview && (
             <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
               {overview && (
@@ -533,7 +686,7 @@ export function LearningPathRoadmap({
           <div className={`-mx-5 -mt-5 md:-mx-7 md:-mt-7 mb-6 rounded-t-3xl px-5 py-5 md:px-7 ${cfg.bg} border-b ${cfg.border}`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm bg-white`}>
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm bg-white">
                   {cfg.icon}
                 </div>
                 <div>
@@ -562,16 +715,24 @@ export function LearningPathRoadmap({
               </div>
             </div>
             {description && (
-              <p className="mt-3 text-sm leading-7 text-gray-700">{description}</p>
+              <div className="mt-3">
+                <EditableText
+                  value={textValue(description)}
+                  onChange={editable("description")}
+                />
+              </div>
             )}
           </div>
 
-          {/* Goal + key content — top row */}
+          {/* Goal + key content */}
           {(hasContent(goal) || keyContent.length > 0) && (
             <div className="mb-4 grid gap-3 md:grid-cols-2">
               {hasContent(goal) && (
                 <StepSection emoji="🎯" title="Mục tiêu bước này" variant="violet">
-                  <p className="text-sm leading-7 text-gray-700">{textValue(goal)}</p>
+                  <EditableText
+                    value={textValue(goal)}
+                    onChange={editable("learning_goal")}
+                  />
                 </StepSection>
               )}
               {keyContent.length > 0 && (
@@ -582,7 +743,7 @@ export function LearningPathRoadmap({
             </div>
           )}
 
-          {/* Read / Do / Write — action items */}
+          {/* Read / Do / Write */}
           {(readItems.length > 0 || doItems.length > 0 || writeItems.length > 0) && (
             <div className="mb-4 grid gap-3 md:grid-cols-3">
               {readItems.length > 0 && (
@@ -619,7 +780,7 @@ export function LearningPathRoadmap({
             </div>
           )}
 
-          {/* Formulas */}
+          {/* Formulas — dùng FormulaDisplay */}
           {formulas.length > 0 && (
             <div className="mb-4">
               <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
@@ -630,8 +791,8 @@ export function LearningPathRoadmap({
                 <div className="grid gap-3 md:grid-cols-2">
                   {formulas.map((formula: any, i: number) => (
                     <div key={i} className="rounded-xl border border-blue-200 bg-white p-3">
-                      <div className="font-mono text-sm font-bold text-blue-950">
-                        {formula?.formula || textValue(formula)}
+                      <div className="text-sm">
+                        <FormulaDisplay formula={formula?.formula || textValue(formula)} className="text-sm" />
                       </div>
                       {formula?.meaning && (
                         <p className="mt-1 text-xs leading-5 text-blue-700/80">{formula.meaning}</p>
@@ -659,7 +820,10 @@ export function LearningPathRoadmap({
           {miniExample && (
             <div className="mb-4">
               <StepSection emoji="🌟" title="Ví dụ dễ hiểu" variant="amber">
-                <p className="text-sm leading-7 text-gray-700">{miniExample}</p>
+                <EditableText
+                  value={textValue(miniExample)}
+                  onChange={editable("mini_example")}
+                />
               </StepSection>
             </div>
           )}
@@ -679,9 +843,11 @@ export function LearningPathRoadmap({
                     </span>
                   )}
                 </div>
-                <p className="text-sm leading-7 text-gray-800 font-medium">
-                  {typeof practiceTask === "string" ? practiceTask : practiceTask?.task || textValue(practiceTask)}
-                </p>
+                <EditableText
+                  value={typeof practiceTask === "string" ? practiceTask : practiceTask?.task || textValue(practiceTask)}
+                  onChange={editable("practice_task")}
+                  className="font-medium"
+                />
                 {typeof practiceTask === "object" && practiceTask?.expected_answer_format && (
                   <p className="mt-2 text-xs text-indigo-600">
                     <b>Cách trả lời:</b> {practiceTask.expected_answer_format}
@@ -691,7 +857,7 @@ export function LearningPathRoadmap({
             </div>
           )}
 
-          {/* Mistakes + Expected + Mastery + Support — bottom row */}
+          {/* Mistakes + Expected + Mastery + Support */}
           {(mistakes.length > 0 || expected.length > 0 || hasContent(mastery) || hasContent(supportTip) || hasContent(checkpoint)) && (
             <div className="grid gap-3 md:grid-cols-2">
               {mistakes.length > 0 && (
@@ -706,12 +872,18 @@ export function LearningPathRoadmap({
               )}
               {hasContent(mastery) && (
                 <StepSection emoji="💎" title="Dấu hiệu đã hiểu bài" variant="green">
-                  <p className="text-sm leading-7 text-gray-700">{textValue(mastery)}</p>
+                  <EditableText
+                    value={textValue(mastery)}
+                    onChange={editable("mastery_check")}
+                  />
                 </StepSection>
               )}
               {hasContent(supportTip) && (
                 <StepSection emoji="🤝" title="Gợi ý khi gặp khó khăn" variant="amber">
-                  <p className="text-sm leading-7 text-gray-700">{textValue(supportTip)}</p>
+                  <EditableText
+                    value={textValue(supportTip)}
+                    onChange={editable("support_tip")}
+                  />
                 </StepSection>
               )}
               {hasContent(checkpoint) && (
@@ -720,7 +892,11 @@ export function LearningPathRoadmap({
                     <span className="text-base">🧪</span>
                     <h4 className={`text-xs font-bold uppercase tracking-wider ${cfg.color}`}>Tự kiểm tra nhanh</h4>
                   </div>
-                  <p className="text-sm font-medium leading-7 text-gray-800">{textValue(checkpoint)}</p>
+                  <EditableText
+                    value={textValue(checkpoint)}
+                    onChange={editable("checkpoint_question")}
+                    className="font-medium"
+                  />
                 </div>
               )}
             </div>
@@ -791,7 +967,7 @@ export function LearningPathRoadmap({
         </Card>
       )}
 
-      {/* ── MỤC TIÊU + CÂU HỎI CHO THẦY (nếu có) ───────────────────── */}
+      {/* ── MỤC TIÊU + CÂU HỎI CHO THẦY ────────────────────────────── */}
       {(hasContent(learningObjectives) || questionsForTeacher.length > 0) && (
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           {hasContent(learningObjectives) && (
@@ -820,8 +996,7 @@ export function LearningPathRoadmap({
   );
 }
 
-
-// ─── MINDMAP (giữ nguyên) ─────────────────────────────────────────────────────
+// ─── MINDMAP ──────────────────────────────────────────────────────────────────
 
 function getMindmapTitle(mindmap: any) {
   return (
@@ -932,7 +1107,7 @@ export function InteractiveMindmap({ mindmap }: { mindmap: any }) {
   );
 }
 
-// ─── QUESTION BANK (giữ nguyên) ───────────────────────────────────────────────
+// ─── QUESTION BANK ────────────────────────────────────────────────────────────
 
 function normalizeQuestion(question: any, index: number) {
   const content = question?.content_json || question?.question_json || question;

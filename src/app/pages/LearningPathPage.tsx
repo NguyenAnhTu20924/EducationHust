@@ -59,6 +59,19 @@ export default function LearningPathPage() {
     }
   };
 
+  const handleSaveNodeField = async (nodeId: string, field: string, value: string) => {
+    try {
+      await apiCall(`/learning-path-nodes/${nodeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ [field]: value }),
+      });
+      toast.success("Đã lưu!");
+      await fetchDetail();
+    } catch (error: any) {
+      toast.error(error.message || "Không thể lưu");
+    }
+  };
+
   if (loading) return <div className="text-gray-600">Đang tải...</div>;
   if (!data?.module) return <div className="text-gray-600">Không tìm thấy module.</div>;
 
@@ -90,9 +103,14 @@ export default function LearningPathPage() {
 
       {/* Learning Path Roadmap */}
       {learningPath ? (
-        <LearningPathRoadmap learningPath={learningPath} learningPathNodes={learningPathNodes || []} />
+        <LearningPathRoadmap
+          learningPath={learningPath}
+          learningPathNodes={learningPathNodes || []}
+          isTeacher={isTeacher}
+          onSaveNodeField={handleSaveNodeField}
+        />
       ) : (
-        <EmptyBox>Chưa có lộ trình học tập. Giáo viên hãy bấm “Tạo lộ trình”.</EmptyBox>
+        <EmptyBox>Chưa có lộ trình học tập. Giáo viên hãy bấm "Tạo lộ trình".</EmptyBox>
       )}
 
       {/* Self-Assessment Checklist (chỉ học sinh) */}

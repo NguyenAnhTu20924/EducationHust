@@ -85,16 +85,16 @@ function normalizeMindmap(raw: any): MindmapData {
       summary: src?.summary || "",
       branches: legacyNodes.map((n: any, i: number) => ({
         id: n.id || `b${i}`,
-        title: n.title || n.label || n.name || n.topic || n.main_idea || `Nhánh ${i+1}`,
+        title: n.title || n.label || n.name || n.topic || n.main_idea || `Nhánh ${i + 1}`,
         color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
         icon: "book",
         children: (n.children || n.subtopics || n.branches || n.items || []).map((c: any, j: number) => ({
           id: c.id || `b${i}c${j}`,
-          title: c.title || c.label || c.name || `Ý ${j+1}`,
+          title: c.title || c.label || c.name || `Ý ${j + 1}`,
           detail: c.description || c.detail || c.summary || "",
           children: (c.children || []).map((l: any, k: number) => ({
             id: l.id || `b${i}c${j}l${k}`,
-            title: l.title || l.label || l.name || `Chi tiết ${k+1}`,
+            title: l.title || l.label || l.name || `Chi tiết ${k + 1}`,
             detail: l.detail || l.description || l.summary || "",
           }))
         }))
@@ -145,14 +145,23 @@ function estimateWidth(label: string, type: "center" | "branch" | "child" | "lea
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
 function DetailPanel({
-  node, color, onClose
+  node, color, onClose, onSave
 }: {
   node: MindmapNode | MindmapBranch;
   color: string;
   onClose: () => void;
+  onSave: (updated: { title: string; detail: string }) => void;
 }) {
   const rgb = hexToRgb(color);
   const children = (node as any).children || [];
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(node.title);
+  const [editDetail, setEditDetail] = useState((node as MindmapNode).detail || "");
+
+  function handleSave() {
+    onSave({ title: editTitle, detail: editDetail });
+    setEditing(false);
+  }
 
   return (
     <div
@@ -164,67 +173,126 @@ function DetailPanel({
         className="flex items-start justify-between gap-3 p-4"
         style={{ background: `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)` }}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <div
             className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white"
             style={{ background: color }}
           >
             {getIcon((node as MindmapBranch).icon)}
           </div>
-          <h3 className="font-bold text-gray-900 text-sm leading-snug">{node.title}</h3>
+          {editing ? (
+            <input
+              className="flex-1 rounded-lg border border-gray-300 px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-violet-400"
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              autoFocus
+            />
+          ) : (
+            <h3 className="font-bold text-gray-900 text-sm leading-snug">{node.title}</h3>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1 rounded-lg hover:bg-black/10 text-gray-500 shrink-0 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="p-1 rounded-lg hover:bg-black/10 text-gray-400 transition-colors"
+              title="Chỉnh sửa"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-black/10 text-gray-500 shrink-0 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Body */}
       <div className="p-4 max-h-[420px] overflow-y-auto space-y-3">
-        {(node as MindmapNode).detail && (
-          <p className="text-sm leading-6 text-gray-700">{(node as MindmapNode).detail}</p>
-        )}
-
-        {children.length > 0 && (
-          <div className="space-y-2">
-            {children.map((child: MindmapNode, i: number) => (
-              <div
-                key={child.id || i}
-                className="rounded-xl p-3"
-                style={{ background: `rgba(${rgb.r},${rgb.g},${rgb.b},0.06)`, border: `1px solid rgba(${rgb.r},${rgb.g},${rgb.b},0.15)` }}
+        {editing ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">Mô tả / Giải thích</label>
+              <textarea
+                className="w-full rounded-xl border border-gray-300 p-2.5 text-sm text-gray-700 outline-none focus:border-violet-400 resize-none leading-6"
+                rows={5}
+                value={editDetail}
+                onChange={e => setEditDetail(e.target.value)}
+                placeholder="Nhập mô tả cho nhánh này..."
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleSave}
+                className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition"
+                style={{ background: color }}
               >
-                <div className="flex items-start gap-2">
-                  <div
-                    className="mt-1 w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ background: color }}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">{child.title}</p>
-                    {child.detail && (
-                      <p className="mt-1 text-xs leading-5 text-gray-600">{child.detail}</p>
-                    )}
-                    {child.children && child.children.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {child.children.map((leaf, j) => (
-                          <div key={leaf.id || j} className="flex items-center gap-1.5">
-                            <ChevronRight className="w-3 h-3 shrink-0" style={{ color }} />
-                            <span className="text-xs text-gray-600">{leaf.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+                Lưu
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditTitle(node.title);
+                  setEditDetail((node as MindmapNode).detail || "");
+                  setEditing(false);
+                }}
+                className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+              >
+                Hủy
+              </button>
+            </div>
           </div>
-        )}
-
-        {children.length === 0 && !(node as MindmapNode).detail && (
-          <p className="text-sm text-gray-500 text-center py-4">Không có chi tiết</p>
+        ) : (
+          <>
+            {(node as MindmapNode).detail && (
+              <p className="text-sm leading-6 text-gray-700">{(node as MindmapNode).detail}</p>
+            )}
+            {children.length > 0 && (
+              <div className="space-y-2">
+                {children.map((child: MindmapNode, i: number) => (
+                  <div
+                    key={child.id || i}
+                    className="rounded-xl p-3"
+                    style={{ background: `rgba(${rgb.r},${rgb.g},${rgb.b},0.06)`, border: `1px solid rgba(${rgb.r},${rgb.g},${rgb.b},0.15)` }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="mt-1 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{child.title}</p>
+                        {child.detail && (
+                          <p className="mt-1 text-xs leading-5 text-gray-600">{child.detail}</p>
+                        )}
+                        {child.children && child.children.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {child.children.map((leaf, j) => (
+                              <div key={leaf.id || j} className="flex items-center gap-1.5">
+                                <ChevronRight className="w-3 h-3 shrink-0" style={{ color }} />
+                                <span className="text-xs text-gray-600">{leaf.title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {children.length === 0 && !(node as MindmapNode).detail && (
+              <p className="text-sm text-gray-500 text-center py-4">
+                Không có chi tiết.{" "}
+                <button type="button" className="text-violet-600 underline" onClick={() => setEditing(true)}>
+                  Thêm mô tả
+                </button>
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -263,7 +331,7 @@ interface LayoutBounds {
 
 interface MindmapLayout {
   nodes: NodePos[];
-  edges: {from: string; to: string; color: string}[];
+  edges: { from: string; to: string; color: string }[];
   bounds: LayoutBounds;
   center: { x: number; y: number };
 }
@@ -282,7 +350,7 @@ function measureBranchBlock(branch: MindmapBranch) {
 
 function buildLayout(data: MindmapData): MindmapLayout {
   const nodes: NodePos[] = [];
-  const edges: {from: string; to: string; color: string}[] = [];
+  const edges: { from: string; to: string; color: string }[] = [];
   const center = { x: 0, y: 0 };
 
   const centerLabel = data.central_topic || data.title || "Bài học";
@@ -454,7 +522,13 @@ function getBounds(nodes: NodePos[]): LayoutBounds {
 
 // ─── Main Canvas Component ────────────────────────────────────────────────────
 
-export function MindmapCanvas({ mindmapRaw }: { mindmapRaw: any }) {
+export function MindmapCanvas({
+  mindmapRaw,
+  onSaveChanges,
+}: {
+  mindmapRaw: any;
+  onSaveChanges?: (updated: MindmapData) => void;
+}) {
   const data = useMemo(() => normalizeMindmap(mindmapRaw), [mindmapRaw]);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -464,9 +538,11 @@ export function MindmapCanvas({ mindmapRaw }: { mindmapRaw: any }) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [selected, setSelected] = useState<{ node: NodePos; branch: MindmapBranch | null } | null>(null);
+  const [editedData, setEditedData] = useState<MindmapData | null>(null);
   const [size, setSize] = useState({ w: 900, h: 600 });
 
-  const { nodes, edges, bounds, center } = useMemo(() => buildLayout(data), [data]);
+  const displayData = editedData || data;
+  const { nodes, edges, bounds, center } = useMemo(() => buildLayout(displayData), [displayData]);
 
   const viewBox = `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`;
   const panSvgX = size.w > 0 ? pan.x * bounds.width / size.w : 0;
@@ -536,6 +612,26 @@ export function MindmapCanvas({ mindmapRaw }: { mindmapRaw: any }) {
     return `M ${from.x} ${from.y} C ${from.x + direction * curve} ${from.y}, ${to.x - direction * curve} ${to.y}, ${to.x} ${to.y}`;
   }
 
+  function handleSaveNode(updated: { title: string; detail: string }) {
+    if (!selected) return;
+    const nodeId = selected.node.id;
+
+    function updateNode(node: MindmapNode): MindmapNode {
+      if (node.id === nodeId) return { ...node, title: updated.title, detail: updated.detail };
+      return { ...node, children: node.children?.map(updateNode) };
+    }
+
+    const newBranches = (displayData.branches || []).map((branch): MindmapBranch => {
+      if (branch.id === nodeId) return { ...branch, title: updated.title };
+      return { ...branch, children: branch.children?.map(updateNode) };
+    });
+
+    setEditedData({ ...displayData, branches: newBranches });
+    // Cập nhật selected để panel hiển thị đúng
+    const updatedNode = { ...selected.node, label: updated.title, detail: updated.detail };
+    setSelected({ ...selected, node: updatedNode });
+  }
+
   return (
     <div className="relative flex flex-col h-full">
       {/* Toolbar */}
@@ -564,6 +660,27 @@ export function MindmapCanvas({ mindmapRaw }: { mindmapRaw: any }) {
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors" title="Xem toàn bộ">
             <Maximize2 className="w-4 h-4" />
           </button>
+          {editedData && (
+            <>
+              <div className="w-px h-4 bg-gray-200 mx-1" />
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSaveChanges) onSaveChanges(editedData);
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
+              >
+                Lưu thay đổi
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditedData(null); setSelected(null); }}
+                className="text-xs text-gray-500 hover:text-gray-700 px-2"
+              >
+                Hoàn tác
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -731,6 +848,7 @@ export function MindmapCanvas({ mindmapRaw }: { mindmapRaw: any }) {
             node={getFullNode(selected.node)}
             color={selected.node.color}
             onClose={() => setSelected(null)}
+            onSave={handleSaveNode}
           />
         )}
 

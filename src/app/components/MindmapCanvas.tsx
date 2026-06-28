@@ -6,8 +6,6 @@ import {
   PenLine, BarChart2, FileText, X
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface MindmapNode {
   id: string;
   title: string;
@@ -28,12 +26,9 @@ interface MindmapData {
   central_topic?: string;
   summary?: string;
   branches?: MindmapBranch[];
-  // legacy fallback
   nodes?: any[];
   children?: any[];
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_COLORS = [
   "#6366f1", "#0ea5e9", "#10b981", "#f59e0b",
@@ -75,8 +70,6 @@ function normalizeMindmap(raw: any): MindmapData {
       }))
     };
   }
-
-  // Try to convert legacy nodes/children format
   const legacyNodes = src?.nodes || src?.children || [];
   if (legacyNodes.length > 0) {
     return {
@@ -150,17 +143,29 @@ function DetailPanel({
   node: MindmapNode | MindmapBranch;
   color: string;
   onClose: () => void;
-  onSave: (updated: { title: string; detail: string }) => void;
+  onSave: (updated: { title: string; detail: string }) => Promise<void> | void;
 }) {
   const rgb = hexToRgb(color);
   const children = (node as any).children || [];
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(node.title);
   const [editDetail, setEditDetail] = useState((node as MindmapNode).detail || "");
+  const [saving, setSaving] = useState(false);
 
-  function handleSave() {
-    onSave({ title: editTitle, detail: editDetail });
+  useEffect(() => {
     setEditing(false);
+    setEditTitle(node.title);
+    setEditDetail((node as MindmapNode).detail || "");
+  }, [node.id]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSave({ title: editTitle, detail: editDetail });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -168,7 +173,6 @@ function DetailPanel({
       className="absolute right-4 top-4 z-30 w-80 rounded-2xl shadow-2xl overflow-hidden"
       style={{ background: "white", border: `1.5px solid ${color}30` }}
     >
-      {/* Header */}
       <div
         className="flex items-start justify-between gap-3 p-4"
         style={{ background: `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)` }}
@@ -199,7 +203,10 @@ function DetailPanel({
               className="p-1 rounded-lg hover:bg-black/10 text-gray-400 transition-colors"
               title="Chỉnh sửa"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
             </button>
           )}
           <button
@@ -212,7 +219,6 @@ function DetailPanel({
         </div>
       </div>
 
-      {/* Body */}
       <div className="p-4 max-h-[420px] overflow-y-auto space-y-3">
         {editing ? (
           <div className="space-y-3">
@@ -230,13 +236,15 @@ function DetailPanel({
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition"
+                disabled={saving}
+                className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition disabled:opacity-60"
                 style={{ background: color }}
               >
-                Lưu
+                {saving ? "Đang lưu..." : "Lưu"}
               </button>
               <button
                 type="button"
+                disabled={saving}
                 onClick={() => {
                   setEditTitle(node.title);
                   setEditDetail((node as MindmapNode).detail || "");
@@ -299,36 +307,19 @@ function DetailPanel({
   );
 }
 
-// ─── SVG Mindmap Canvas ───────────────────────────────────────────────────────
+// ─── Layout ───────────────────────────────────────────────────────────────────
 
 interface NodePos {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  label: string;
-  color: string;
+  id: string; x: number; y: number; w: number; h: number;
+  label: string; color: string;
   type: "center" | "branch" | "child" | "leaf";
-  icon?: string;
-  detail?: string;
-  childCount?: number;
-  parentId?: string;
-  branchColor?: string;
-  side?: 1 | -1;
-  branchIndex?: number;
-  childIndex?: number;
-  leafIndex?: number;
+  icon?: string; detail?: string; childCount?: number;
+  parentId?: string; branchColor?: string;
+  side?: 1 | -1; branchIndex?: number; childIndex?: number; leafIndex?: number;
   data?: MindmapNode | MindmapBranch;
 }
 
-interface LayoutBounds {
-  minX: number;
-  minY: number;
-  width: number;
-  height: number;
-}
-
+interface LayoutBounds { minX: number; minY: number; width: number; height: number; }
 interface MindmapLayout {
   nodes: NodePos[];
   edges: { from: string; to: string; color: string }[];
@@ -352,186 +343,89 @@ function buildLayout(data: MindmapData): MindmapLayout {
   const nodes: NodePos[] = [];
   const edges: { from: string; to: string; color: string }[] = [];
   const center = { x: 0, y: 0 };
-
   const centerLabel = data.central_topic || data.title || "Bài học";
-  nodes.push({
-    id: "center",
-    x: center.x,
-    y: center.y,
-    w: estimateWidth(centerLabel, "center"),
-    h: 58,
-    label: centerLabel,
-    color: "#1e1b4b",
-    type: "center"
-  });
-
+  nodes.push({ id: "center", x: 0, y: 0, w: estimateWidth(centerLabel, "center"), h: 58, label: centerLabel, color: "#1e1b4b", type: "center" });
   const branches = data.branches || [];
-  if (branches.length === 0) {
-    return { nodes, edges, bounds: getBounds(nodes), center };
-  }
+  if (branches.length === 0) return { nodes, edges, bounds: getBounds(nodes), center };
 
   const indexedBranches = branches.map((branch, index) => ({
-    branch: {
-      ...branch,
-      color: normalizeColor(branch.color, DEFAULT_COLORS[index % DEFAULT_COLORS.length])
-    },
+    branch: { ...branch, color: normalizeColor(branch.color, DEFAULT_COLORS[index % DEFAULT_COLORS.length]) },
     index,
     blockHeight: measureBranchBlock(branch)
   }));
 
-  const rightSide = indexedBranches.filter((_, index) => index % 2 === 0);
-  const leftSide = indexedBranches.filter((_, index) => index % 2 === 1);
-
-  const BRANCH_X = 270;
-  const CHILD_X = 485;
-  const LEAF_X = 670;
-  const BRANCH_GAP = 42;
-  const CHILD_GAP = 24;
-  const LEAF_GAP = 30;
+  const BRANCH_X = 270, CHILD_X = 485, LEAF_X = 670;
+  const BRANCH_GAP = 42, CHILD_GAP = 24, LEAF_GAP = 30;
 
   function placeSide(items: typeof indexedBranches, side: 1 | -1) {
-    if (items.length === 0) return;
-
-    const totalHeight = items.reduce((sum, item) => sum + item.blockHeight, 0) + (items.length - 1) * BRANCH_GAP;
+    if (!items.length) return;
+    const totalHeight = items.reduce((s, i) => s + i.blockHeight, 0) + (items.length - 1) * BRANCH_GAP;
     let cursorY = -totalHeight / 2;
-
     items.forEach(({ branch, index: branchIndex, blockHeight }) => {
       const branchId = `branch-${branchIndex}`;
       const branchY = cursorY + blockHeight / 2;
       const branchColor = normalizeColor(branch.color, DEFAULT_COLORS[branchIndex % DEFAULT_COLORS.length]);
-
-      nodes.push({
-        id: branchId,
-        x: side * BRANCH_X,
-        y: branchY,
-        w: estimateWidth(branch.title, "branch"),
-        h: 46,
-        label: branch.title,
-        color: branchColor,
-        type: "branch",
-        icon: branch.icon,
-        childCount: branch.children?.length || 0,
-        branchColor,
-        side,
-        branchIndex,
-        data: branch
-      });
+      nodes.push({ id: branchId, x: side * BRANCH_X, y: branchY, w: estimateWidth(branch.title, "branch"), h: 46, label: branch.title, color: branchColor, type: "branch", icon: branch.icon, childCount: branch.children?.length || 0, branchColor, side, branchIndex, data: branch });
       edges.push({ from: "center", to: branchId, color: branchColor });
-
       const children = branch.children || [];
       if (children.length > 0) {
         const childBlocks = children.map(measureChildBlock);
-        const childTotalHeight = childBlocks.reduce((sum, value) => sum + value, 0) + (children.length - 1) * CHILD_GAP;
+        const childTotalHeight = childBlocks.reduce((s, v) => s + v, 0) + (children.length - 1) * CHILD_GAP;
         let childCursorY = branchY - childTotalHeight / 2;
-
         children.forEach((child, childIndex) => {
           const childId = `${branchId}-child-${childIndex}`;
-          const childBlock = childBlocks[childIndex];
-          const childY = childCursorY + childBlock / 2;
-
-          nodes.push({
-            id: childId,
-            x: side * CHILD_X,
-            y: childY,
-            w: estimateWidth(child.title, "child"),
-            h: 38,
-            label: child.title,
-            color: branchColor,
-            type: "child",
-            detail: child.detail,
-            childCount: child.children?.length || 0,
-            parentId: branchId,
-            branchColor,
-            side,
-            branchIndex,
-            childIndex,
-            data: child
-          });
+          const childY = childCursorY + childBlocks[childIndex] / 2;
+          nodes.push({ id: childId, x: side * CHILD_X, y: childY, w: estimateWidth(child.title, "child"), h: 38, label: child.title, color: branchColor, type: "child", detail: child.detail, childCount: child.children?.length || 0, parentId: branchId, branchColor, side, branchIndex, childIndex, data: child });
           edges.push({ from: branchId, to: childId, color: branchColor });
-
           const leaves = child.children || [];
           if (leaves.length > 0) {
             const leafStartY = childY - ((leaves.length - 1) * LEAF_GAP) / 2;
-
             leaves.forEach((leaf, leafIndex) => {
               const leafId = `${childId}-leaf-${leafIndex}`;
-              nodes.push({
-                id: leafId,
-                x: side * LEAF_X,
-                y: leafStartY + leafIndex * LEAF_GAP,
-                w: estimateWidth(leaf.title, "leaf"),
-                h: 28,
-                label: leaf.title,
-                color: branchColor,
-                type: "leaf",
-                parentId: childId,
-                branchColor,
-                side,
-                branchIndex,
-                childIndex,
-                leafIndex,
-                data: leaf
-              });
+              nodes.push({ id: leafId, x: side * LEAF_X, y: leafStartY + leafIndex * LEAF_GAP, w: estimateWidth(leaf.title, "leaf"), h: 28, label: leaf.title, color: branchColor, type: "leaf", parentId: childId, branchColor, side, branchIndex, childIndex, leafIndex, data: leaf });
               edges.push({ from: childId, to: leafId, color: branchColor });
             });
           }
-
-          childCursorY += childBlock + CHILD_GAP;
+          childCursorY += childBlocks[childIndex] + CHILD_GAP;
         });
       }
-
       cursorY += blockHeight + BRANCH_GAP;
     });
   }
 
-  placeSide(rightSide, 1);
-  placeSide(leftSide, -1);
-
+  placeSide(indexedBranches.filter((_, i) => i % 2 === 0), 1);
+  placeSide(indexedBranches.filter((_, i) => i % 2 === 1), -1);
   return { nodes, edges, bounds: getBounds(nodes), center };
 }
 
 function getBounds(nodes: NodePos[]): LayoutBounds {
-  const PADDING_X = 150;
-  const PADDING_Y = 110;
-
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-
-  nodes.forEach((node) => {
-    const halfW = node.w / 2;
-    const halfH = node.h / 2;
-    minX = Math.min(minX, node.x - halfW);
-    maxX = Math.max(maxX, node.x + halfW);
-    minY = Math.min(minY, node.y - halfH);
-    maxY = Math.max(maxY, node.y + halfH);
+  const PX = 150, PY = 110;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  nodes.forEach(n => {
+    minX = Math.min(minX, n.x - n.w / 2); maxX = Math.max(maxX, n.x + n.w / 2);
+    minY = Math.min(minY, n.y - n.h / 2); maxY = Math.max(maxY, n.y + n.h / 2);
   });
-
-  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
-    return { minX: -500, minY: -300, width: 1000, height: 600 };
-  }
-
-  return {
-    minX: minX - PADDING_X,
-    minY: minY - PADDING_Y,
-    width: Math.max(900, maxX - minX + PADDING_X * 2),
-    height: Math.max(560, maxY - minY + PADDING_Y * 2),
-  };
+  if (!Number.isFinite(minX)) return { minX: -500, minY: -300, width: 1000, height: 600 };
+  return { minX: minX - PX, minY: minY - PY, width: Math.max(900, maxX - minX + PX * 2), height: Math.max(560, maxY - minY + PY * 2) };
 }
 
-// ─── Main Canvas Component ────────────────────────────────────────────────────
+// ─── Main Canvas ──────────────────────────────────────────────────────────────
 
 export function MindmapCanvas({
   mindmapRaw,
   onSaveChanges,
 }: {
   mindmapRaw: any;
-  onSaveChanges?: (updated: MindmapData) => void;
+  onSaveChanges?: (updated: MindmapData) => Promise<void> | void;
 }) {
   const data = useMemo(() => normalizeMindmap(mindmapRaw), [mindmapRaw]);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onSaveChangesRef = useRef(onSaveChanges);
+
+  useEffect(() => {
+    onSaveChangesRef.current = onSaveChanges;
+  }, [onSaveChanges]);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -549,26 +443,22 @@ export function MindmapCanvas({
   const panSvgY = size.h > 0 ? pan.y * bounds.height / size.h : 0;
   const contentTransform = `translate(${panSvgX} ${panSvgY}) translate(${center.x} ${center.y}) scale(${zoom}) translate(${-center.x} ${-center.y})`;
 
-  // Fit to container
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setSize({ w: el.clientWidth, h: el.clientHeight });
-    });
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
     setSize({ w: el.clientWidth, h: el.clientHeight });
     return () => ro.disconnect();
   }, []);
 
-  // Reset viewport when another mindmap is loaded
   useEffect(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setSelected(null);
+    setEditedData(null);
   }, [mindmapRaw]);
 
-  // Pan handlers
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as Element).closest("[data-node]")) return;
     setIsDragging(true);
@@ -587,11 +477,7 @@ export function MindmapCanvas({
     setZoom(z => Math.max(0.35, Math.min(3, z - e.deltaY * 0.001)));
   }, []);
 
-  function handleReset() {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-    setSelected(null);
-  }
+  function handleReset() { setZoom(1); setPan({ x: 0, y: 0 }); setSelected(null); }
 
   function handleNodeClick(node: NodePos) {
     if (node.type === "center") { setSelected(null); return; }
@@ -599,12 +485,10 @@ export function MindmapCanvas({
     setSelected({ node, branch });
   }
 
-  // Find full node data for detail panel
   function getFullNode(nodePos: NodePos): MindmapNode | MindmapBranch {
     return nodePos.data || { id: nodePos.id, title: nodePos.label };
   }
 
-  // Curved edge path between two nodes
   function edgePath(from: NodePos, to: NodePos) {
     const dx = to.x - from.x;
     const curve = Math.min(120, Math.max(60, Math.abs(dx) * 0.45));
@@ -612,7 +496,7 @@ export function MindmapCanvas({
     return `M ${from.x} ${from.y} C ${from.x + direction * curve} ${from.y}, ${to.x - direction * curve} ${to.y}, ${to.x} ${to.y}`;
   }
 
-  function handleSaveNode(updated: { title: string; detail: string }) {
+  async function handleSaveNode(updated: { title: string; detail: string }) {
     if (!selected) return;
     const nodeId = selected.node.id;
 
@@ -626,10 +510,13 @@ export function MindmapCanvas({
       return { ...branch, children: branch.children?.map(updateNode) };
     });
 
-    setEditedData({ ...displayData, branches: newBranches });
-    // Cập nhật selected để panel hiển thị đúng
-    const updatedNode = { ...selected.node, label: updated.title, detail: updated.detail };
-    setSelected({ ...selected, node: updatedNode });
+    const newData = { ...displayData, branches: newBranches };
+    setEditedData(newData);
+    setSelected({ ...selected, node: { ...selected.node, label: updated.title, detail: updated.detail } });
+
+    if (onSaveChangesRef.current) {
+      await onSaveChangesRef.current(newData);
+    }
   }
 
   return (
@@ -660,27 +547,6 @@ export function MindmapCanvas({
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors" title="Xem toàn bộ">
             <Maximize2 className="w-4 h-4" />
           </button>
-          {editedData && (
-            <>
-              <div className="w-px h-4 bg-gray-200 mx-1" />
-              <button
-                type="button"
-                onClick={() => {
-                  if (onSaveChanges) onSaveChanges(editedData);
-                }}
-                className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
-              >
-                Lưu thay đổi
-              </button>
-              <button
-                type="button"
-                onClick={() => { setEditedData(null); setSelected(null); }}
-                className="text-xs text-gray-500 hover:text-gray-700 px-2"
-              >
-                Hoàn tác
-              </button>
-            </>
-          )}
         </div>
       </div>
 
@@ -699,16 +565,8 @@ export function MindmapCanvas({
         onMouseLeave={onMouseUp}
         onWheel={onWheel}
       >
-        <svg
-          ref={svgRef}
-          width="100%"
-          height="100%"
-          viewBox={viewBox}
-          preserveAspectRatio="xMidYMid meet"
-          className="block select-none"
-        >
+        <svg ref={svgRef} width="100%" height="100%" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="block select-none">
           <g transform={contentTransform} style={{ transition: isDragging ? "none" : "transform 0.12s ease" }}>
-            {/* Edges */}
             {edges.map((edge, i) => {
               const fromNode = nodes.find(n => n.id === edge.from);
               const toNode = nodes.find(n => n.id === edge.to);
@@ -716,66 +574,43 @@ export function MindmapCanvas({
               const rgb = hexToRgb(edge.color);
               const isSelected = selected?.node.id === toNode.id || selected?.node.id === fromNode.id;
               return (
-                <path
-                  key={`${edge.from}-${edge.to}-${i}`}
-                  d={edgePath(fromNode, toNode)}
-                  fill="none"
-                  stroke={`rgba(${rgb.r},${rgb.g},${rgb.b},${isSelected ? 0.85 : 0.3})`}
-                  strokeWidth={isSelected ? 3 : 1.7}
-                  strokeLinecap="round"
-                  style={{ transition: "all 0.2s ease" }}
-                />
+                <path key={`${edge.from}-${edge.to}-${i}`} d={edgePath(fromNode, toNode)}
+                  fill="none" stroke={`rgba(${rgb.r},${rgb.g},${rgb.b},${isSelected ? 0.85 : 0.3})`}
+                  strokeWidth={isSelected ? 3 : 1.7} strokeLinecap="round"
+                  style={{ transition: "all 0.2s ease" }} />
               );
             })}
 
-            {/* Nodes */}
             {nodes.map((node) => {
               const isSelected = selected?.node.id === node.id;
               const rgb = hexToRgb(node.color);
-              const hw = node.w / 2;
-              const hh = node.h / 2;
+              const hw = node.w / 2, hh = node.h / 2;
 
-              if (node.type === "center") {
-                return (
-                  <g key={node.id} transform={`translate(${node.x},${node.y})`}>
-                    <ellipse rx={hw + 10} ry={hh + 10} fill="#1e1b4b" opacity={0.06} cy={5} />
-                    <rect x={-hw} y={-hh} width={node.w} height={node.h} rx={17}
-                      fill="#1e1b4b" />
-                    <text x={0} y={5} textAnchor="middle" dominantBaseline="middle"
-                      fill="white" fontSize={13} fontWeight="700"
-                      style={{ fontFamily: "system-ui, sans-serif" }}>
-                      {shortLabel(node.label, 24)}
-                    </text>
-                    <title>{node.label}</title>
-                  </g>
-                );
-              }
+              if (node.type === "center") return (
+                <g key={node.id} transform={`translate(${node.x},${node.y})`}>
+                  <ellipse rx={hw + 10} ry={hh + 10} fill="#1e1b4b" opacity={0.06} cy={5} />
+                  <rect x={-hw} y={-hh} width={node.w} height={node.h} rx={17} fill="#1e1b4b" />
+                  <text x={0} y={5} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={13} fontWeight="700" style={{ fontFamily: "system-ui, sans-serif" }}>
+                    {shortLabel(node.label, 24)}
+                  </text>
+                  <title>{node.label}</title>
+                </g>
+              );
 
               if (node.type === "branch") {
                 const bg = isSelected ? node.color : `rgba(${rgb.r},${rgb.g},${rgb.b},0.12)`;
                 const textColor = isSelected ? "white" : node.color;
                 return (
-                  <g key={node.id} data-node="1" transform={`translate(${node.x},${node.y})`} style={{ cursor: "pointer" }}
-                    onClick={() => handleNodeClick(node)}>
-                    <rect x={-hw - 5} y={-hh - 5} width={node.w + 10} height={node.h + 10} rx={16}
-                      fill={node.color} opacity={0.12} />
-                    <rect x={-hw} y={-hh} width={node.w} height={node.h} rx={13}
-                      fill={bg}
-                      stroke={node.color}
-                      strokeWidth={isSelected ? 2.4 : 1.6}
-                      style={{ transition: "all 0.2s ease" }}
-                    />
-                    <text x={0} y={2} textAnchor="middle" dominantBaseline="middle"
-                      fill={textColor} fontSize={11.5} fontWeight="700"
-                      style={{ fontFamily: "system-ui, sans-serif", transition: "all 0.2s ease" }}>
+                  <g key={node.id} data-node="1" transform={`translate(${node.x},${node.y})`} style={{ cursor: "pointer" }} onClick={() => handleNodeClick(node)}>
+                    <rect x={-hw - 5} y={-hh - 5} width={node.w + 10} height={node.h + 10} rx={16} fill={node.color} opacity={0.12} />
+                    <rect x={-hw} y={-hh} width={node.w} height={node.h} rx={13} fill={bg} stroke={node.color} strokeWidth={isSelected ? 2.4 : 1.6} style={{ transition: "all 0.2s ease" }} />
+                    <text x={0} y={2} textAnchor="middle" dominantBaseline="middle" fill={textColor} fontSize={11.5} fontWeight="700" style={{ fontFamily: "system-ui, sans-serif", transition: "all 0.2s ease" }}>
                       {shortLabel(node.label, 22)}
                     </text>
                     {node.childCount && node.childCount > 0 ? (
                       <g transform={`translate(${hw - 10},${-hh + 10})`}>
                         <circle r={7} fill={node.color} />
-                        <text y={1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={7.5} fontWeight="700">
-                          {node.childCount}
-                        </text>
+                        <text y={1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={7.5} fontWeight="700">{node.childCount}</text>
                       </g>
                     ) : null}
                     <title>{node.label}</title>
@@ -783,56 +618,27 @@ export function MindmapCanvas({
                 );
               }
 
-              if (node.type === "child") {
-                return (
-                  <g key={node.id} data-node="1" transform={`translate(${node.x},${node.y})`} style={{ cursor: "pointer" }}
-                    onClick={() => handleNodeClick(node)}>
-                    <rect
-                      x={-hw} y={-hh}
-                      width={node.w} height={node.h} rx={11}
-                      fill={isSelected ? node.color : "white"}
-                      stroke={node.color}
-                      strokeWidth={isSelected ? 2.2 : 1.2}
-                      strokeOpacity={isSelected ? 1 : 0.55}
-                      style={{ transition: "all 0.2s ease" }}
-                    />
-                    <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
-                      fill={isSelected ? "white" : "#374151"} fontSize={10.5} fontWeight="600"
-                      style={{ fontFamily: "system-ui, sans-serif", transition: "all 0.2s ease" }}>
-                      {shortLabel(node.label, 26)}
-                    </text>
-                    {node.childCount && node.childCount > 0 ? (
-                      <g transform={`translate(${hw - 8},${-hh + 8})`}>
-                        <circle r={6.5} fill={node.color} />
-                        <text y={1} textAnchor="middle" dominantBaseline="middle"
-                          fill="white" fontSize={7} fontWeight="700">
-                          {node.childCount}
-                        </text>
-                      </g>
-                    ) : null}
-                    <title>{node.label}</title>
-                  </g>
-                );
-              }
+              if (node.type === "child") return (
+                <g key={node.id} data-node="1" transform={`translate(${node.x},${node.y})`} style={{ cursor: "pointer" }} onClick={() => handleNodeClick(node)}>
+                  <rect x={-hw} y={-hh} width={node.w} height={node.h} rx={11} fill={isSelected ? node.color : "white"} stroke={node.color} strokeWidth={isSelected ? 2.2 : 1.2} strokeOpacity={isSelected ? 1 : 0.55} style={{ transition: "all 0.2s ease" }} />
+                  <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fill={isSelected ? "white" : "#374151"} fontSize={10.5} fontWeight="600" style={{ fontFamily: "system-ui, sans-serif", transition: "all 0.2s ease" }}>
+                    {shortLabel(node.label, 26)}
+                  </text>
+                  {node.childCount && node.childCount > 0 ? (
+                    <g transform={`translate(${hw - 8},${-hh + 8})`}>
+                      <circle r={6.5} fill={node.color} />
+                      <text y={1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={7} fontWeight="700">{node.childCount}</text>
+                    </g>
+                  ) : null}
+                  <title>{node.label}</title>
+                </g>
+              );
 
-              // leaf
               return (
-                <g key={node.id} data-node="1" transform={`translate(${node.x},${node.y})`} style={{ cursor: "pointer" }}
-                  onClick={() => handleNodeClick(node)}>
-                  <rect
-                    x={-hw} y={-hh}
-                    width={node.w} height={node.h} rx={9}
-                    fill={isSelected ? node.color : "white"}
-                    stroke={node.color}
-                    strokeWidth={isSelected ? 2 : 1}
-                    strokeOpacity={isSelected ? 1 : 0.42}
-                    style={{ transition: "all 0.2s ease" }}
-                  />
-                  <circle cx={-hw + 12} cy={0} r={4}
-                    fill={isSelected ? "white" : node.color} fillOpacity={isSelected ? 0.9 : 0.65} />
-                  <text x={4} y={1} textAnchor="middle" dominantBaseline="middle"
-                    fill={isSelected ? "white" : "#6b7280"} fontSize={9.5} fontWeight="500"
-                    style={{ fontFamily: "system-ui, sans-serif" }}>
+                <g key={node.id} data-node="1" transform={`translate(${node.x},${node.y})`} style={{ cursor: "pointer" }} onClick={() => handleNodeClick(node)}>
+                  <rect x={-hw} y={-hh} width={node.w} height={node.h} rx={9} fill={isSelected ? node.color : "white"} stroke={node.color} strokeWidth={isSelected ? 2 : 1} strokeOpacity={isSelected ? 1 : 0.42} style={{ transition: "all 0.2s ease" }} />
+                  <circle cx={-hw + 12} cy={0} r={4} fill={isSelected ? "white" : node.color} fillOpacity={isSelected ? 0.9 : 0.65} />
+                  <text x={4} y={1} textAnchor="middle" dominantBaseline="middle" fill={isSelected ? "white" : "#6b7280"} fontSize={9.5} fontWeight="500" style={{ fontFamily: "system-ui, sans-serif" }}>
                     {shortLabel(node.label, 23)}
                   </text>
                   <title>{node.label}</title>
@@ -842,7 +648,6 @@ export function MindmapCanvas({
           </g>
         </svg>
 
-        {/* Detail panel */}
         {selected && (
           <DetailPanel
             node={getFullNode(selected.node)}
@@ -852,7 +657,6 @@ export function MindmapCanvas({
           />
         )}
 
-        {/* Legend hint */}
         {!selected && (
           <div className="absolute bottom-3 left-3 text-xs text-gray-400 bg-white/80 rounded-xl px-3 py-2 pointer-events-none">
             Cuộn để zoom • Kéo để di chuyển • Bấm nhánh để xem chi tiết
@@ -860,33 +664,21 @@ export function MindmapCanvas({
         )}
       </div>
 
-      {/* Summary bar */}
       {data.summary && (
         <div className="px-4 py-2.5 bg-violet-50 border-t border-violet-100 text-xs text-violet-800 leading-5">
           <span className="font-semibold">Tóm tắt: </span>{data.summary}
         </div>
       )}
 
-      {/* Branch legend */}
       {data.branches && data.branches.length > 0 && (
         <div className="flex flex-wrap gap-2 px-4 py-2.5 bg-white border-t border-gray-100">
           {data.branches.map((b, index) => {
             const color = normalizeColor(b.color, DEFAULT_COLORS[index % DEFAULT_COLORS.length]);
             return (
-              <button
-                key={`legend-${index}-${b.id || b.title}`}
-                type="button"
-                onClick={() => {
-                  const node = nodes.find(n => n.type === "branch" && n.branchIndex === index);
-                  if (node) handleNodeClick(node);
-                }}
+              <button key={`legend-${index}-${b.id || b.title}`} type="button"
+                onClick={() => { const node = nodes.find(n => n.type === "branch" && n.branchIndex === index); if (node) handleNodeClick(node); }}
                 className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all hover:opacity-80"
-                style={{
-                  background: `${color}18`,
-                  border: `1px solid ${color}40`,
-                  color
-                }}
-              >
+                style={{ background: `${color}18`, border: `1px solid ${color}40`, color }}>
                 <div className="w-2 h-2 rounded-full" style={{ background: color }} />
                 {b.title}
               </button>

@@ -73,7 +73,6 @@ function replaceSymbols(text: string): string {
 
 function tokenizeFormula(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  // Matches: word^{...}, word_{...}, word^x, word_x, num/den
   const re = /(\w+)\^\{([^}]+)\}|(\w+)_\{([^}]+)\}|(\w+)\^(\w+)|(\w+)_(\w+)|([^/\s]+)\/([^/\s]+)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -121,6 +120,17 @@ function FormulaDisplay({ formula, className = "" }: { formula: string; classNam
   );
 }
 
+// ─── Edit icon SVG ────────────────────────────────────────────────────────────
+
+function EditIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  );
+}
+
 // ─── Editable text ────────────────────────────────────────────────────────────
 
 function EditableText({
@@ -161,18 +171,12 @@ function EditableText({
           />
         )}
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => { onChange(draft); setEditing(false); }}
-            className="rounded-lg bg-violet-600 px-3 py-1 text-xs font-semibold text-white hover:bg-violet-700 transition"
-          >
+          <button type="button" onClick={() => { onChange(draft); setEditing(false); }}
+            className="rounded-lg bg-violet-600 px-3 py-1 text-xs font-semibold text-white hover:bg-violet-700 transition">
             Lưu
           </button>
-          <button
-            type="button"
-            onClick={() => { setDraft(value); setEditing(false); }}
-            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
-          >
+          <button type="button" onClick={() => { setDraft(value); setEditing(false); }}
+            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition">
             Hủy
           </button>
         </div>
@@ -183,16 +187,70 @@ function EditableText({
   return (
     <div className="group relative">
       <p className={`text-sm leading-7 text-gray-700 ${className}`}>{value}</p>
-      <button
-        type="button"
-        onClick={() => { setDraft(value); setEditing(true); }}
-        className="absolute -right-1 -top-1 hidden group-hover:flex items-center gap-1 rounded-lg bg-white border border-gray-200 px-2 py-0.5 text-xs text-gray-400 hover:text-violet-600 shadow-sm transition"
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-        </svg>
-        Sửa
+      <button type="button" onClick={() => { setDraft(value); setEditing(true); }}
+        className="absolute -right-1 -top-1 hidden group-hover:flex items-center gap-1 rounded-lg bg-white border border-gray-200 px-2 py-0.5 text-xs text-gray-400 hover:text-violet-600 shadow-sm transition">
+        <EditIcon /> Sửa
+      </button>
+    </div>
+  );
+}
+
+// ─── Editable list ────────────────────────────────────────────────────────────
+
+function EditableList({
+  items,
+  onChange,
+  color = "bg-gray-400",
+}: {
+  items: any[];
+  onChange?: (items: string[]) => void;
+  color?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(items.map(i => textValue(i, "")).join("\n"));
+
+  if (!onChange) {
+    return <BulletList items={items} color={color} />;
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[10px] text-gray-400">Mỗi dòng là một ý — Enter để xuống dòng mới</p>
+        <textarea
+          autoFocus
+          className="w-full rounded-xl border border-violet-300 p-2.5 text-sm text-gray-700 outline-none focus:border-violet-500 resize-none leading-7"
+          rows={Math.max(3, items.length + 1)}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+        />
+        <div className="flex gap-2">
+          <button type="button"
+            onClick={() => {
+              const newItems = draft.split("\n").map(s => s.trim()).filter(Boolean);
+              onChange(newItems);
+              setEditing(false);
+            }}
+            className="rounded-lg bg-violet-600 px-3 py-1 text-xs font-semibold text-white hover:bg-violet-700 transition">
+            Lưu
+          </button>
+          <button type="button"
+            onClick={() => { setDraft(items.map(i => textValue(i, "")).join("\n")); setEditing(false); }}
+            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition">
+            Hủy
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group relative">
+      <BulletList items={items} color={color} />
+      <button type="button"
+        onClick={() => { setDraft(items.map(i => textValue(i, "")).join("\n")); setEditing(true); }}
+        className="absolute -right-1 -top-1 hidden group-hover:flex items-center gap-1 rounded-lg bg-white border border-gray-200 px-2 py-0.5 text-xs text-gray-400 hover:text-violet-600 shadow-sm transition">
+        <EditIcon /> Sửa
       </button>
     </div>
   );
@@ -300,22 +358,14 @@ function SimpleList({ items }: { items: any[] }) {
 }
 
 function DetailBlock({
-  icon,
-  title,
-  children,
-  colorClass = "bg-gray-50 border-gray-200",
+  icon, title, children, colorClass = "bg-gray-50 border-gray-200",
 }: {
-  icon: ReactNode;
-  title: string;
-  children: ReactNode;
-  colorClass?: string;
+  icon: ReactNode; title: string; children: ReactNode; colorClass?: string;
 }) {
   return (
     <div className={`rounded-2xl border p-4 ${colorClass}`}>
       <div className="mb-3 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-          {icon}
-        </div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50 text-violet-700">{icon}</div>
         <h4 className="text-sm font-bold text-gray-950">{title}</h4>
       </div>
       {children}
@@ -336,16 +386,13 @@ function FormulaCard({ formula }: { formula: any }) {
         <div className="mt-3 space-y-1.5">
           {formula.variables.map((item: any, index: number) => (
             <div key={index} className="rounded-xl bg-white/70 px-3 py-2 text-sm text-blue-950">
-              <b>{item.symbol}</b>: {item.meaning}
-              {item.unit ? ` (${item.unit})` : ""}
+              <b>{item.symbol}</b>: {item.meaning}{item.unit ? ` (${item.unit})` : ""}
             </div>
           ))}
         </div>
       ) : null}
       {formula?.when_to_use ? (
-        <p className="mt-3 text-sm leading-6 text-blue-950/80">
-          <b>Khi dùng:</b> {formula.when_to_use}
-        </p>
+        <p className="mt-3 text-sm leading-6 text-blue-950/80"><b>Khi dùng:</b> {formula.when_to_use}</p>
       ) : null}
     </div>
   );
@@ -397,14 +444,10 @@ function PrerequisiteView({ items }: { items: any[] }) {
         <div key={index} className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
           <p className="font-bold text-amber-950">{item?.knowledge_item || textValue(item)}</p>
           {item?.why_needed ? (
-            <p className="mt-2 text-sm leading-6 text-amber-950/80">
-              <b>Vì sao cần:</b> {item.why_needed}
-            </p>
+            <p className="mt-2 text-sm leading-6 text-amber-950/80"><b>Vì sao cần:</b> {item.why_needed}</p>
           ) : null}
           {item?.student_action ? (
-            <p className="mt-1 text-sm leading-6 text-amber-950/80">
-              <b>Em cần làm:</b> {item.student_action}
-            </p>
+            <p className="mt-1 text-sm leading-6 text-amber-950/80"><b>Em cần làm:</b> {item.student_action}</p>
           ) : null}
         </div>
       ))}
@@ -415,12 +458,8 @@ function PrerequisiteView({ items }: { items: any[] }) {
 function LearningObjectivesView({ objectives }: { objectives: any }) {
   if (!objectives || typeof objectives !== "object") return null;
   const order: [string, string][] = [
-    ["remember", "Nhận biết"],
-    ["understand", "Thông hiểu"],
-    ["apply", "Vận dụng"],
-    ["analyze", "Phân tích"],
-    ["evaluate", "Đánh giá"],
-    ["create", "Sáng tạo"],
+    ["remember", "Nhận biết"], ["understand", "Thông hiểu"], ["apply", "Vận dụng"],
+    ["analyze", "Phân tích"], ["evaluate", "Đánh giá"], ["create", "Sáng tạo"],
   ];
   const available = order.filter(([key]) => asArray(objectives[key]).length > 0);
   if (!available.length) return null;
@@ -429,9 +468,7 @@ function LearningObjectivesView({ objectives }: { objectives: any }) {
       {available.map(([key, label]) => (
         <div key={key} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <p className="font-bold text-gray-950">{label}</p>
-          <div className="mt-2">
-            <SimpleList items={asArray(objectives[key])} />
-          </div>
+          <div className="mt-2"><SimpleList items={asArray(objectives[key])} /></div>
         </div>
       ))}
     </div>
@@ -441,8 +478,7 @@ function LearningObjectivesView({ objectives }: { objectives: any }) {
 // ─── STEP CONFIG ──────────────────────────────────────────────────────────────
 
 const STEP_CONFIG: Record<number, {
-  color: string; bg: string; border: string; dot: string;
-  icon: string; accent: string;
+  color: string; bg: string; border: string; dot: string; icon: string; accent: string;
 }> = {
   1: { color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",   dot: "bg-amber-400",   icon: "🔁", accent: "bg-amber-100" },
   2: { color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    dot: "bg-blue-400",    icon: "📖", accent: "bg-blue-100" },
@@ -497,8 +533,7 @@ function BulletList({ items, color = "bg-gray-400" }: { items: any[]; color?: st
 }
 
 function ProgressBar({ nodes, activeStep, onSelect }: {
-  nodes: any[]; activeStep: number;
-  onSelect: (n: number) => void;
+  nodes: any[]; activeStep: number; onSelect: (n: number) => void;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-4 px-4 py-3 backdrop-blur-md bg-white/90 border-b border-gray-100">
@@ -509,13 +544,9 @@ function ProgressBar({ nodes, activeStep, onSelect }: {
           const isDone = stepNo < activeStep;
           const cfg = getStepConfig(stepNo);
           return (
-            <button
-              key={stepNo}
-              type="button"
-              onClick={() => onSelect(stepNo)}
+            <button key={stepNo} type="button" onClick={() => onSelect(stepNo)}
               className={`flex shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition-all
-                ${isActive ? `${cfg.bg} ${cfg.border} border` : isDone ? "opacity-60 hover:opacity-80" : "hover:bg-gray-50"}`}
-            >
+                ${isActive ? `${cfg.bg} ${cfg.border} border` : isDone ? "opacity-60 hover:opacity-80" : "hover:bg-gray-50"}`}>
               <div className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold transition-all
                 ${isActive ? `${cfg.color} ${cfg.accent}` : isDone ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
                 {isDone ? "✓" : stepNo}
@@ -529,10 +560,8 @@ function ProgressBar({ nodes, activeStep, onSelect }: {
         })}
       </div>
       <div className="mt-1.5 h-1 w-full rounded-full bg-gray-100">
-        <div
-          className="h-1 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-500"
-          style={{ width: `${nodes.length > 1 ? ((activeStep - 1) / (nodes.length - 1)) * 100 : 0}%` }}
-        />
+        <div className="h-1 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-500"
+          style={{ width: `${nodes.length > 1 ? ((activeStep - 1) / (nodes.length - 1)) * 100 : 0}%` }} />
       </div>
     </div>
   );
@@ -601,16 +630,22 @@ export function LearningPathRoadmap({
   const prevStep = activeStep > firstStep ? activeStep - 1 : null;
   const nextStep = activeStep < nodes.length ? activeStep + 1 : null;
 
-  // Helper: trả về onChange chỉ khi là giáo viên
+  // text field
   const editable = (field: string) =>
     isTeacher && onSaveNodeField
       ? (v: string) => onSaveNodeField(activeNode?.id, field, v)
       : undefined;
 
+  // list field — chuyển array thành JSON string khi lưu
+  const editableList = (field: string) =>
+    isTeacher && onSaveNodeField
+      ? (v: string[]) => onSaveNodeField(activeNode?.id, field, JSON.stringify(v))
+      : undefined;
+
   return (
     <div className="space-y-0">
 
-      {/* ── HEADER CARD ──────────────────────────────────────────────── */}
+      {/* ── HEADER CARD ── */}
       <Card className="rounded-3xl rounded-b-none border border-gray-200 bg-white shadow-sm">
         <CardContent className="p-5 md:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -626,16 +661,12 @@ export function LearningPathRoadmap({
             <div className="flex items-center gap-2">
               {totalMinutes && (
                 <div className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">
-                  <Clock className="h-3.5 w-3.5 text-violet-500" />
-                  {totalMinutes} phút
+                  <Clock className="h-3.5 w-3.5 text-violet-500" />{totalMinutes} phút
                 </div>
               )}
               {(overview || prerequisiteKnowledge.length || finalOutputs.length) && (
-                <button
-                  type="button"
-                  onClick={() => setShowOverview(v => !v)}
-                  className="flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100 transition"
-                >
+                <button type="button" onClick={() => setShowOverview(v => !v)}
+                  className="flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100 transition">
                   <Target className="h-3.5 w-3.5" />
                   {showOverview ? "Ẩn tổng quan" : "Xem tổng quan"}
                   {showOverview ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -646,13 +677,11 @@ export function LearningPathRoadmap({
 
           {showOverview && (
             <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
-              {overview && (
-                <p className="text-sm leading-7 text-gray-600">{overview}</p>
-              )}
+              {overview && <p className="text-sm leading-7 text-gray-600">{overview}</p>}
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {prerequisiteKnowledge.length > 0 && (
                   <StepSection emoji="⚡" title="Cần biết trước" variant="amber">
-                    <BulletList items={prerequisiteKnowledge.map((i:any) => i?.knowledge_item || i)} color="bg-amber-400" />
+                    <BulletList items={prerequisiteKnowledge.map((i: any) => i?.knowledge_item || i)} color="bg-amber-400" />
                   </StepSection>
                 )}
                 {finalOutputs.length > 0 && (
@@ -671,14 +700,14 @@ export function LearningPathRoadmap({
         </CardContent>
       </Card>
 
-      {/* ── STICKY STEP NAVIGATOR ────────────────────────────────────── */}
+      {/* ── STICKY STEP NAVIGATOR ── */}
       <Card className="rounded-none border-x border-gray-200 bg-white shadow-none">
         <CardContent className="p-0">
           <ProgressBar nodes={nodes} activeStep={activeStep} onSelect={setActiveStep} />
         </CardContent>
       </Card>
 
-      {/* ── STEP DETAIL ──────────────────────────────────────────────── */}
+      {/* ── STEP DETAIL ── */}
       <Card className="rounded-3xl rounded-t-none border border-t-0 border-gray-200 bg-white shadow-sm">
         <CardContent className="p-5 md:p-7">
 
@@ -716,10 +745,7 @@ export function LearningPathRoadmap({
             </div>
             {description && (
               <div className="mt-3">
-                <EditableText
-                  value={textValue(description)}
-                  onChange={editable("description")}
-                />
+                <EditableText value={textValue(description)} onChange={editable("description")} />
               </div>
             )}
           </div>
@@ -729,15 +755,12 @@ export function LearningPathRoadmap({
             <div className="mb-4 grid gap-3 md:grid-cols-2">
               {hasContent(goal) && (
                 <StepSection emoji="🎯" title="Mục tiêu bước này" variant="violet">
-                  <EditableText
-                    value={textValue(goal)}
-                    onChange={editable("learning_goal")}
-                  />
+                  <EditableText value={textValue(goal)} onChange={editable("learning_goal")} />
                 </StepSection>
               )}
               {keyContent.length > 0 && (
                 <StepSection emoji="📚" title="Kiến thức trọng tâm" variant="blue">
-                  <BulletList items={keyContent} color="bg-blue-400" />
+                  <EditableList items={keyContent} color="bg-blue-400" onChange={editableList("key_content")} />
                 </StepSection>
               )}
             </div>
@@ -748,17 +771,17 @@ export function LearningPathRoadmap({
             <div className="mb-4 grid gap-3 md:grid-cols-3">
               {readItems.length > 0 && (
                 <StepSection emoji="📖" title="Em cần đọc / xem">
-                  <BulletList items={readItems} />
+                  <EditableList items={readItems} onChange={editableList("what_to_read")} />
                 </StepSection>
               )}
               {doItems.length > 0 && (
                 <StepSection emoji="✏️" title="Em cần làm" variant="green">
-                  <BulletList items={doItems} color="bg-emerald-400" />
+                  <EditableList items={doItems} color="bg-emerald-400" onChange={editableList("what_to_do")} />
                 </StepSection>
               )}
               {writeItems.length > 0 && (
                 <StepSection emoji="📝" title="Em cần ghi lại" variant="amber">
-                  <BulletList items={writeItems} color="bg-amber-400" />
+                  <EditableList items={writeItems} color="bg-amber-400" onChange={editableList("what_to_write")} />
                 </StepSection>
               )}
             </div>
@@ -768,19 +791,12 @@ export function LearningPathRoadmap({
           {guiding.length > 0 && (
             <div className="mb-4">
               <StepSection emoji="💬" title="Câu hỏi gợi ý để suy nghĩ" variant="violet">
-                <div className="space-y-2">
-                  {guiding.map((q: any, i: number) => (
-                    <div key={i} className="flex gap-2.5">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-200 text-[10px] font-bold text-violet-700">{i+1}</span>
-                      <p className="text-sm leading-6 text-gray-700">{textValue(q, "")}</p>
-                    </div>
-                  ))}
-                </div>
+                <EditableList items={guiding} color="bg-violet-400" onChange={editableList("guiding_questions")} />
               </StepSection>
             </div>
           )}
 
-          {/* Formulas — dùng FormulaDisplay */}
+          {/* Formulas */}
           {formulas.length > 0 && (
             <div className="mb-4">
               <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
@@ -820,10 +836,7 @@ export function LearningPathRoadmap({
           {miniExample && (
             <div className="mb-4">
               <StepSection emoji="🌟" title="Ví dụ dễ hiểu" variant="amber">
-                <EditableText
-                  value={textValue(miniExample)}
-                  onChange={editable("mini_example")}
-                />
+                <EditableText value={textValue(miniExample)} onChange={editable("mini_example")} />
               </StepSection>
             </div>
           )}
@@ -862,28 +875,22 @@ export function LearningPathRoadmap({
             <div className="grid gap-3 md:grid-cols-2">
               {mistakes.length > 0 && (
                 <StepSection emoji="⚠️" title="Lỗi dễ mắc phải" variant="red">
-                  <BulletList items={mistakes} color="bg-red-400" />
+                  <EditableList items={mistakes} color="bg-red-400" onChange={editableList("common_mistakes")} />
                 </StepSection>
               )}
               {expected.length > 0 && (
                 <StepSection emoji="🏆" title="Kết quả cần đạt" variant="green">
-                  <BulletList items={expected} color="bg-emerald-400" />
+                  <EditableList items={expected} color="bg-emerald-400" onChange={editableList("expected_output")} />
                 </StepSection>
               )}
               {hasContent(mastery) && (
                 <StepSection emoji="💎" title="Dấu hiệu đã hiểu bài" variant="green">
-                  <EditableText
-                    value={textValue(mastery)}
-                    onChange={editable("mastery_check")}
-                  />
+                  <EditableText value={textValue(mastery)} onChange={editable("mastery_check")} />
                 </StepSection>
               )}
               {hasContent(supportTip) && (
                 <StepSection emoji="🤝" title="Gợi ý khi gặp khó khăn" variant="amber">
-                  <EditableText
-                    value={textValue(supportTip)}
-                    onChange={editable("support_tip")}
-                  />
+                  <EditableText value={textValue(supportTip)} onChange={editable("support_tip")} />
                 </StepSection>
               )}
               {hasContent(checkpoint) && (
@@ -892,42 +899,24 @@ export function LearningPathRoadmap({
                     <span className="text-base">🧪</span>
                     <h4 className={`text-xs font-bold uppercase tracking-wider ${cfg.color}`}>Tự kiểm tra nhanh</h4>
                   </div>
-                  <EditableText
-                    value={textValue(checkpoint)}
-                    onChange={editable("checkpoint_question")}
-                    className="font-medium"
-                  />
+                  <EditableText value={textValue(checkpoint)} onChange={editable("checkpoint_question")} className="font-medium" />
                 </div>
               )}
             </div>
           )}
 
-          {/* Prev / Next navigation */}
+          {/* Prev / Next */}
           <div className="mt-8 flex items-center justify-between gap-3 border-t border-gray-100 pt-5">
-            <button
-              type="button"
-              disabled={!prevStep}
-              onClick={() => prevStep && setActiveStep(prevStep)}
+            <button type="button" disabled={!prevStep} onClick={() => prevStep && setActiveStep(prevStep)}
               className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition
-                ${prevStep ? "border-gray-200 text-gray-700 hover:bg-gray-50" : "border-transparent text-gray-300 cursor-not-allowed"}`}
-            >
+                ${prevStep ? "border-gray-200 text-gray-700 hover:bg-gray-50" : "border-transparent text-gray-300 cursor-not-allowed"}`}>
               <ChevronDown className="h-4 w-4 rotate-90" />
               {prevStep ? `Bước ${prevStep}` : "Đầu tiên"}
             </button>
-
-            <div className="text-xs font-medium text-gray-400">
-              {activeStep} / {nodes.length}
-            </div>
-
-            <button
-              type="button"
-              disabled={!nextStep}
-              onClick={() => nextStep && setActiveStep(nextStep)}
+            <div className="text-xs font-medium text-gray-400">{activeStep} / {nodes.length}</div>
+            <button type="button" disabled={!nextStep} onClick={() => nextStep && setActiveStep(nextStep)}
               className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition
-                ${nextStep
-                  ? `${cfg.border} ${cfg.bg} ${cfg.color} hover:opacity-90`
-                  : "border-transparent text-gray-300 cursor-not-allowed"}`}
-            >
+                ${nextStep ? `${cfg.border} ${cfg.bg} ${cfg.color} hover:opacity-90` : "border-transparent text-gray-300 cursor-not-allowed"}`}>
               {nextStep ? `Bước ${nextStep}` : "Xong rồi 🎉"}
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -935,7 +924,7 @@ export function LearningPathRoadmap({
         </CardContent>
       </Card>
 
-      {/* ── CHECKLIST TỰ ĐÁNH GIÁ ────────────────────────────────────── */}
+      {/* ── CHECKLIST ── */}
       {selfAssessmentChecklist.length > 0 && (
         <Card className="mt-4 rounded-3xl border border-gray-200 bg-white shadow-sm">
           <CardContent className="p-5 md:p-6">
@@ -953,9 +942,7 @@ export function LearningPathRoadmap({
                     <CheckCircle2 className="h-3 w-3 text-violet-600" />
                   </div>
                   <div>
-                    <p className="text-sm leading-6 text-gray-800 font-medium">
-                      {item?.criteria || textValue(item)}
-                    </p>
+                    <p className="text-sm leading-6 text-gray-800 font-medium">{item?.criteria || textValue(item)}</p>
                     {item?.bloom_level && (
                       <span className="text-[10px] text-gray-400">{getBloomLabel(item.bloom_level)}</span>
                     )}
@@ -967,7 +954,7 @@ export function LearningPathRoadmap({
         </Card>
       )}
 
-      {/* ── MỤC TIÊU + CÂU HỎI CHO THẦY ────────────────────────────── */}
+      {/* ── MỤC TIÊU + CÂU HỎI ── */}
       {(hasContent(learningObjectives) || questionsForTeacher.length > 0) && (
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           {hasContent(learningObjectives) && (
@@ -1010,44 +997,31 @@ function getMindmapTitle(mindmap: any) {
 function getMindmapNodes(mindmap: any) {
   const content = mindmap?.content_json || mindmap?.mindmap || mindmap;
   return (
-    content?.nodes ||
-    content?.branches ||
-    content?.mindmap?.nodes ||
-    content?.mindmap?.branches ||
-    content?.children ||
-    []
+    content?.nodes || content?.branches ||
+    content?.mindmap?.nodes || content?.mindmap?.branches ||
+    content?.children || []
   );
 }
 
 function MindmapBranch({ node, level = 0 }: { node: any; level?: number }) {
   const [open, setOpen] = useState(true);
-  const title =
-    node?.title || node?.label || node?.name || node?.topic || node?.main_idea || textValue(node, "Ý chính");
-  const children =
-    node?.children || node?.subtopics || node?.branches || node?.items || node?.details || [];
+  const title = node?.title || node?.label || node?.name || node?.topic || node?.main_idea || textValue(node, "Ý chính");
+  const children = node?.children || node?.subtopics || node?.branches || node?.items || node?.details || [];
   const hasChildren = Array.isArray(children) && children.length > 0;
 
   return (
     <div className={`${level > 0 ? "ml-4 border-l border-violet-100 pl-4" : ""}`}>
       <div className="my-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          className="flex w-full items-start gap-3 text-left"
-        >
+        <button type="button" onClick={() => setOpen(prev => !prev)} className="flex w-full items-start gap-3 text-left">
           <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-            {hasChildren ? (
-              open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
-            ) : (
-              <Network className="h-3.5 w-3.5" />
-            )}
+            {hasChildren
+              ? open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
+              : <Network className="h-3.5 w-3.5" />}
           </div>
           <div>
             <p className="font-bold text-gray-950">{title}</p>
             {node?.description || node?.summary || node?.content ? (
-              <p className="mt-1 text-sm leading-6 text-gray-600">
-                {node.description || node.summary || node.content}
-              </p>
+              <p className="mt-1 text-sm leading-6 text-gray-600">{node.description || node.summary || node.content}</p>
             ) : null}
           </div>
         </button>
@@ -1073,8 +1047,7 @@ export function InteractiveMindmap({ mindmap }: { mindmap: any }) {
       <Card className="rounded-3xl border border-violet-100 bg-violet-50 shadow-sm">
         <CardContent className="p-6">
           <h2 className="flex items-center gap-2 text-xl font-bold text-violet-950">
-            <Network className="h-5 w-5" />
-            {title}
+            <Network className="h-5 w-5" />{title}
           </h2>
           <p className="mt-2 text-sm leading-7 text-violet-950/80">
             Sơ đồ tư duy được tách sang trang riêng để dễ theo dõi các nhánh kiến thức.
@@ -1086,18 +1059,14 @@ export function InteractiveMindmap({ mindmap }: { mindmap: any }) {
         <Card className="rounded-3xl border border-gray-200 bg-gray-50 shadow-sm">
           <CardContent className="p-5">
             <div className="rounded-3xl bg-white p-5">
-              {nodes.map((node: any, index: number) => (
-                <MindmapBranch key={index} node={node} />
-              ))}
+              {nodes.map((node: any, index: number) => <MindmapBranch key={index} node={node} />)}
             </div>
           </CardContent>
         </Card>
       ) : contentText ? (
         <Card className="rounded-3xl border border-gray-200 bg-white shadow-sm">
           <CardContent className="p-6">
-            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-gray-800">
-              {contentText}
-            </pre>
+            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-gray-800">{contentText}</pre>
           </CardContent>
         </Card>
       ) : (
@@ -1118,20 +1087,13 @@ function normalizeQuestion(question: any, index: number) {
     difficulty: question?.difficulty || content?.difficulty || "Chưa phân loại",
     bloomLevel: question?.bloom_level || content?.bloom_level || "",
     question:
-      question?.question_text ||
-      question?.content ||
-      content?.question ||
-      content?.question_text ||
-      content?.content ||
+      question?.question_text || question?.content ||
+      content?.question || content?.question_text || content?.content ||
       "Chưa có nội dung câu hỏi",
     options: content?.options || question?.options || content?.choices || question?.choices || [],
     answer:
-      question?.correct_answer ||
-      question?.answer ||
-      content?.correct_answer ||
-      content?.answer ||
-      content?.correctOption ||
-      "",
+      question?.correct_answer || question?.answer ||
+      content?.correct_answer || content?.answer || content?.correctOption || "",
     explanation: question?.explanation || content?.explanation || content?.solution || "",
   };
 }
@@ -1139,21 +1101,16 @@ function normalizeQuestion(question: any, index: number) {
 export function QuestionBankView({ questions }: { questions: any[] }) {
   const [filter, setFilter] = useState("all");
 
-  const normalized = useMemo(() => {
-    return questions.map((question, index) => normalizeQuestion(question, index));
-  }, [questions]);
+  const normalized = useMemo(() => questions.map((q, i) => normalizeQuestion(q, i)), [questions]);
 
   const levels = useMemo(() => {
-    const values = normalized
-      .map((q) => q.difficulty || q.bloomLevel)
-      .filter(Boolean)
-      .map((v) => String(v));
+    const values = normalized.map(q => q.difficulty || q.bloomLevel).filter(Boolean).map(v => String(v));
     return ["all", ...Array.from(new Set(values))];
   }, [normalized]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return normalized;
-    return normalized.filter((q) => q.difficulty === filter || q.bloomLevel === filter);
+    return normalized.filter(q => q.difficulty === filter || q.bloomLevel === filter);
   }, [filter, normalized]);
 
   return (
@@ -1163,22 +1120,16 @@ export function QuestionBankView({ questions }: { questions: any[] }) {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-950">Danh sách câu hỏi</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Có {normalized.length} câu hỏi. Lọc theo mức độ để xem dễ hơn.
-              </p>
+              <p className="mt-1 text-sm text-gray-600">Có {normalized.length} câu hỏi. Lọc theo mức độ để xem dễ hơn.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {levels.map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setFilter(level)}
+              {levels.map(level => (
+                <button key={level} type="button" onClick={() => setFilter(level)}
                   className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
                     filter === level
                       ? "border-violet-500 bg-violet-600 text-white"
                       : "border-gray-200 bg-white text-gray-700 hover:border-violet-300"
-                  }`}
-                >
+                  }`}>
                   {level === "all" ? "Tất cả" : level}
                 </button>
               ))}
@@ -1188,19 +1139,15 @@ export function QuestionBankView({ questions }: { questions: any[] }) {
       </Card>
 
       <div className="space-y-4">
-        {filtered.map((question) => (
+        {filtered.map(question => (
           <Card key={question.id} className="rounded-3xl border border-gray-200 bg-white shadow-sm">
             <CardContent className="p-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge className="rounded-full bg-violet-600 text-xs">Câu {question.order}</Badge>
                   <Badge variant="outline" className="rounded-full text-xs">{question.type}</Badge>
-                  {question.difficulty ? (
-                    <Badge variant="outline" className="rounded-full text-xs">{question.difficulty}</Badge>
-                  ) : null}
-                  {question.bloomLevel ? (
-                    <Badge variant="outline" className="rounded-full text-xs">{question.bloomLevel}</Badge>
-                  ) : null}
+                  {question.difficulty && <Badge variant="outline" className="rounded-full text-xs">{question.difficulty}</Badge>}
+                  {question.bloomLevel && <Badge variant="outline" className="rounded-full text-xs">{question.bloomLevel}</Badge>}
                 </div>
               </div>
               <h3 className="mt-4 text-base font-bold leading-8 text-gray-950">{question.question}</h3>
@@ -1213,22 +1160,18 @@ export function QuestionBankView({ questions }: { questions: any[] }) {
                   ))}
                 </div>
               ) : null}
-              {question.answer ? (
+              {question.answer && (
                 <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                   <p className="text-sm font-bold text-emerald-950">Đáp án</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-emerald-950/80">
-                    {textValue(question.answer, "")}
-                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-emerald-950/80">{textValue(question.answer, "")}</p>
                 </div>
-              ) : null}
-              {question.explanation ? (
+              )}
+              {question.explanation && (
                 <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 p-4">
                   <p className="text-sm font-bold text-blue-950">Giải thích</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-blue-950/80">
-                    {textValue(question.explanation, "")}
-                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-blue-950/80">{textValue(question.explanation, "")}</p>
                 </div>
-              ) : null}
+              )}
             </CardContent>
           </Card>
         ))}

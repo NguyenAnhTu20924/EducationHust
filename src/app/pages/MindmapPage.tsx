@@ -17,6 +17,7 @@ export default function MindmapPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [mindmapVersion, setMindmapVersion] = useState(0);
 
   const fetchDetail = async () => {
     if (!id) return;
@@ -46,10 +47,25 @@ export default function MindmapPage() {
       });
       toast.success("Đã tạo mindmap thành công!");
       await fetchDetail();
+      setMindmapVersion(v => v + 1);
     } catch (error: any) {
       toast.error(error.message || "Không thể tạo mindmap");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleSaveMindmapChanges = async (updatedData: any) => {
+    try {
+      await apiCall(`/mindmaps/${data.mindmap.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content_json: updatedData }),
+      });
+      toast.success("Đã lưu thay đổi!");
+      await fetchDetail();
+      setMindmapVersion(v => v + 1);
+    } catch (error: any) {
+      toast.error(error.message || "Không thể lưu");
     }
   };
 
@@ -67,19 +83,6 @@ export default function MindmapPage() {
   }
 
   const { module, mindmap } = data;
-
-  const handleSaveMindmapChanges = async (updatedData: any) => {
-    try {
-      await apiCall(`/mindmaps/${mindmap.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ content_json: updatedData }),
-      });
-      toast.success("Đã lưu thay đổi mindmap!");
-      await fetchDetail();
-    } catch (error: any) {
-      toast.error(error.message || "Không thể lưu");
-    }
-  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] -mx-6 -my-6">
@@ -130,10 +133,14 @@ export default function MindmapPage() {
         </div>
       </div>
 
-      {/* Canvas area — takes all remaining height */}
+      {/* Canvas area */}
       <div className="flex-1 overflow-hidden">
         {mindmap ? (
-          <MindmapCanvas mindmapRaw={mindmap} onSaveChanges={isTeacher ? handleSaveMindmapChanges : undefined} />
+          <MindmapCanvas
+            key={mindmapVersion}
+            mindmapRaw={mindmap}
+            onSaveChanges={isTeacher ? handleSaveMindmapChanges : undefined}
+          />
         ) : (
           <div className="flex items-center justify-center h-full p-8">
             <EmptyBox>

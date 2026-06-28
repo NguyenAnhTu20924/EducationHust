@@ -23,7 +23,7 @@ app.use(
   cors({
     origin: "*",
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
   }),
@@ -2464,6 +2464,115 @@ app.get("/make-server-f5d1386a/my-quiz-attempts", async (c) => {
   }
 });
 
+
+// ─── PATCH learning-path-nodes/:id (GV chỉnh sửa trực tiếp) ─────────────────
+
+app.patch("/make-server-f5d1386a/learning-path-nodes/:id", async (c) => {
+  try {
+    const auth = await getAuthUser(c);
+    if (!auth) return c.json({ error: "Unauthorized" }, 401);
+    if (auth.profile.role !== "teacher") return c.json({ error: "Forbidden" }, 403);
+
+    const nodeId = c.req.param("id");
+    const body = await c.req.json();
+
+    // Verify node tồn tại và thuộc module của giáo viên này
+    const { data: node, error: nodeError } = await supabase
+      .from("learning_path_nodes")
+      .select("id, module_id")
+      .eq("id", nodeId)
+      .maybeSingle();
+
+    if (nodeError || !node) return c.json({ error: "Node not found" }, 404);
+
+    // Kiểm tra giáo viên sở hữu module này
+    if (node.module_id) {
+      const { data: mod } = await supabase
+        .from("subject_modules")
+        .select("teacher_id")
+        .eq("id", node.module_id)
+        .maybeSingle();
+      if (!mod || mod.teacher_id !== auth.user.id) {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+    }
+
+    // Chỉ cho phép update các field an toàn
+    const allowedFields = [
+      "description", "learning_goal", "mini_example",
+      "practice_task", "mastery_check", "support_tip",
+      "checkpoint_question", "key_content", "what_to_read",
+      "what_to_do", "what_to_write", "guiding_questions",
+      "common_mistakes", "expected_output",
+    ];
+
+    const updateData: Record<string, any> = {};
+    for (const field of allowedFields) {
+      if (field in body) {
+        let value = body[field];
+        // Nếu là string JSON array thì parse lại
+        if (typeof value === "string") {
+          try { value = JSON.parse(value); } catch { /* giữ nguyên string */ }
+        }
+        updateData[field] = value;
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return c.json({ error: "No valid fields to update" }, 400);
+    }
+
+    const { error: updateError } = await supabase
+      .from("learning_path_nodes")
+      .update(updateData)
+      .eq("id", nodeId);
+
+    if (updateError) return c.json({ error: updateError.message }, 500);
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Patch learning-path-node error:", err);
+    return c.json({ error: "Failed to update node" }, 500);
+  }
+});
+
+// ─── PATCH mindmaps/:id (GV chỉnh sửa trực tiếp) ────────────────────────────
+
+app.patch("/make-server-f5d1386a/mindmaps/:id", async (c) => {
+  try {
+    const auth = await getAuthUser(c);
+    if (!auth) return c.json({ error: "Unauthorized" }, 401);
+    if (auth.profile.role !== "teacher") return c.json({ error: "Forbidden" }, 403);
+
+    const mindmapId = c.req.param("id");
+    const body = await c.req.json();
+
+    const { data: mindmap } = await supabase
+      .from("mindmaps")
+      .select("id, creator_id")
+      .eq("id", mindmapId)
+      .maybeSingle();
+
+    if (!mindmap) return c.json({ error: "Mindmap not found" }, 404);
+    if (mindmap.creator_id !== auth.user.id) return c.json({ error: "Forbidden" }, 403);
+
+    const { error } = await supabase
+      .from("mindmaps")
+      .update({
+        content_json: body.content_json,
+        chapter_structure: body.content_json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", mindmapId);
+
+    if (error) return c.json({ error: error.message }, 500);
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Patch mindmap error:", err);
+    return c.json({ error: "Failed to update mindmap" }, 500);
+  }
+});
 
 app.route("/make-server-f5d1386a/api", telegramApp);
 

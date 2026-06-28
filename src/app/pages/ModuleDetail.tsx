@@ -210,7 +210,7 @@ function StudentModuleView({data,id,navigate}:{data:any;id:string;navigate:(p:an
 }
 
 // ─── Teacher View ─────────────────────────────────────────────────────────────
-function TeacherModuleView({data,id,navigate}:{data:any;id:string;navigate:(p:any)=>void}) {
+function TeacherModuleView({data,id,navigate,onRefresh}:{data:any;id:string;navigate:(p:any)=>void;onRefresh:()=>void}) {
   const {module,lessonPlan,learningPath,mindmap,questionItems}=data;
   const [actionLoading,setAL]=useState("");
   const [uploadOpen,setUO]=useState(false);
@@ -240,28 +240,28 @@ function TeacherModuleView({data,id,navigate}:{data:any;id:string;navigate:(p:an
       const{error:ue}=await supabase.storage.from(LESSON_PLAN_BUCKET).upload(sp,uploadFile,{contentType:uploadFile.type||"application/octet-stream",upsert:false});
       if(ue) throw new Error(ue.message);
       await apiCall("/lesson-plans",{method:"POST",body:JSON.stringify({moduleId:module.id,title:module.title,subject:module.subject,grade:module.grade,lessonTitle:module.lesson_title,bookSet:module.book_set,description:module.description,fileName:uploadFile.name,filePath:sp,extractedText:null})});
-      toast.success("Đã upload giáo án"); setUF(null); setUO(false);
+      toast.success("Đã upload giáo án"); setUF(null); setUO(false); onRefresh();
     } catch(e:any){toast.error(e.message);} finally{setUpd(false);}
   }
 
   async function doGenLP() {
     if(!lessonPlan?.id){toast.error("Upload giáo án trước");return;}
     setAL("learning-path");
-    try{await apiCall("/generate-learning-path",{method:"POST",body:JSON.stringify({lessonPlanId:lessonPlan.id})});toast.success("Đã tạo lộ trình");}
+    try{await apiCall("/generate-learning-path",{method:"POST",body:JSON.stringify({lessonPlanId:lessonPlan.id})});toast.success("Đã tạo lộ trình");onRefresh();}
     catch(e:any){toast.error(e.message);} finally{setAL("");}
   }
 
   async function doGenMM() {
     if(!lessonPlan?.id){toast.error("Upload giáo án trước");return;}
     setAL("mindmap");
-    try{await apiCall("/generate-mindmap",{method:"POST",body:JSON.stringify({lessonPlanId:lessonPlan.id})});toast.success("Đã tạo mindmap");}
+    try{await apiCall("/generate-mindmap",{method:"POST",body:JSON.stringify({lessonPlanId:lessonPlan.id})});toast.success("Đã tạo mindmap");onRefresh();}
     catch(e:any){toast.error(e.message);} finally{setAL("");}
   }
 
   async function doGenQ(opts:{questionCount:number;difficulty:string;questionType:string}) {
     if(!lessonPlan?.id){toast.error("Upload giáo án trước");return;}
     setAL("questions"); setGQ(false);
-    try{await apiCall("/generate-questions",{method:"POST",body:JSON.stringify({lessonPlanId:lessonPlan.id,...opts})});toast.success(`Đã tạo ${opts.questionCount} câu hỏi`);}
+    try{await apiCall("/generate-questions",{method:"POST",body:JSON.stringify({lessonPlanId:lessonPlan.id,...opts})});toast.success(`Đã tạo ${opts.questionCount} câu hỏi`);onRefresh();}
     catch(e:any){toast.error(e.message);} finally{setAL("");}
   }
 
@@ -456,9 +456,14 @@ export default function ModuleDetail() {
     apiCall(`/modules/${id}`).then(r=>setData(r)).catch((e:any)=>toast.error(e.message||"Không thể tải")).finally(()=>setLoading(false));
   },[id]);
 
+  function refresh() {
+    if(!id) return;
+    apiCall(`/modules/${id}`).then(r=>setData(r)).catch((e:any)=>toast.error(e.message||"Không thể tải"));
+  }
+
   if(loading) return <div className="flex items-center justify-center py-20 text-sm text-gray-400">Đang tải...</div>;
   if(!data?.module) return <div className="py-20 text-center text-gray-500">Không tìm thấy môn học.</div>;
 
   if(!isTeacher) return <StudentModuleView data={data} id={id!} navigate={navigate}/>;
-  return <TeacherModuleView data={data} id={id!} navigate={navigate}/>;
+  return <TeacherModuleView data={data} id={id!} navigate={navigate} onRefresh={refresh}/>;
 }
